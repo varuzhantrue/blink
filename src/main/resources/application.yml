@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: Blink
+  # ------------------------------------
+  # 1. PostgreSQL Database Configuration
+  # ------------------------------------
+  datasource:
+    url: jdbc:postgresql://localhost:5432/blinkdb
+    username: user
+    password: pass
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+
+# ------------------------------------
+# 2. MinIO Configuration
+# ------------------------------------
+minio:
+  url: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket-name: storage-bucket
