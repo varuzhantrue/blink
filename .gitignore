@@ -35,3 +35,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Exclude compiled binaries
+gradle/wrapper/gradle-wrapper.jar
