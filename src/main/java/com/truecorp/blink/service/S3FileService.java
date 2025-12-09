@@ -8,12 +8,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.UUID;
@@ -80,8 +78,7 @@ public class S3FileService {
                     .key(s3ObjectKey)
                     .build();
 
-            ResponseInputStream<GetObjectResponse> stream = s3Client.getObject(getObjectRequest);
-            return stream;
+            return s3Client.getObject(getObjectRequest);
         } catch (S3Exception e) {
             log.error("S3 download failed for file: {}", fileMetadata.getOriginalFileName(), e);
             throw new ResourceNotFoundException("File not found in storage with key: " + s3ObjectKey);
