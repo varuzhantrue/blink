@@ -3,6 +3,7 @@ package com.truecorp.blink.service;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
 import com.truecorp.blink.repository.FileMetadataRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class S3FileService {
 
@@ -33,8 +35,8 @@ public class S3FileService {
     }
 
     @Transactional
-    public FileMetadata uploadFile(MultipartFile file) throws IOException {
-        String s3ObjectKey = UUID.randomUUID().toString() + "-" + file.getOriginalFilename();
+    public FileMetadata uploadFile(MultipartFile file) {
+        String s3ObjectKey = UUID.randomUUID() + "-" + file.getOriginalFilename();
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
@@ -58,8 +60,10 @@ public class S3FileService {
 
             return fileMetadataRepository.save(metadata);
         } catch (S3Exception e) {
+            log.error("S3 upload failed for file: {}", file.getOriginalFilename(), e);
             throw new RuntimeException("S3 upload failed: " + e.getMessage(), e);
         } catch (Exception e) {
+            log.error("Generic upload failed for file: {}", file.getOriginalFilename(), e);
             throw new RuntimeException("Upload failed: " + e.getMessage(), e);
         }
     }
@@ -79,8 +83,10 @@ public class S3FileService {
             ResponseInputStream<GetObjectResponse> stream = s3Client.getObject(getObjectRequest);
             return stream;
         } catch (S3Exception e) {
+            log.error("S3 download failed for file: {}", fileMetadata.getOriginalFileName(), e);
             throw new ResourceNotFoundException("File not found in storage with key: " + s3ObjectKey);
         } catch (Exception e) {
+            log.error("Generic download failed for file: {}", fileMetadata.getOriginalFileName(), e);
             throw new RuntimeException("Error retrieving file from S3: " + e.getMessage(), e);
         }
     }
@@ -106,9 +112,10 @@ public class S3FileService {
             s3Client.deleteObject(deleteObjectRequest);
             fileMetadataRepository.deleteById(fileId);
         } catch (S3Exception e) {
-            System.err.println("S3 delete error for key " + s3ObjectKey + ": " + e.getMessage());
+            log.error("S3 file deletion failed for key: {}: {}", s3ObjectKey, e.getMessage(), e);
             throw new RuntimeException("S3 file deletion failed: " + e.getMessage(), e);
         } catch (Exception e) {
+            log.error("Generic file deletion failed for key: {}: {}", s3ObjectKey, e.getMessage(), e);
             throw new RuntimeException("Deletion failed: " + e.getMessage(), e);
         }
     }

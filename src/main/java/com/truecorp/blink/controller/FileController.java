@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.InputStream;
 
 @RestController
@@ -27,18 +28,13 @@ public class FileController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<FileMetadata> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<FileMetadata> uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
 
-        try {
-            FileMetadata fileMetadata = s3FileService.uploadFile(file);
-            return new ResponseEntity<>(fileMetadata, HttpStatus.CREATED);
-        } catch (Exception e) {
-            System.err.println("Upload failed: " + e.getMessage());
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        FileMetadata fileMetadata = s3FileService.uploadFile(file);
+        return new ResponseEntity<>(fileMetadata, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}/download")
@@ -46,48 +42,29 @@ public class FileController {
         FileMetadata metadata = fileMetadataRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found with ID " + id));
 
-        try {
-            InputStream fileStream = s3FileService.downloadFile(id);
-            HttpHeaders headers = new HttpHeaders();
-            String contentDisposition = "attachment; filename=\"" + metadata.getOriginalFileName() + "\"";
-            headers.add(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
+        InputStream fileStream = s3FileService.downloadFile(id);
+        HttpHeaders headers = new HttpHeaders();
+        String contentDisposition = "attachment; filename=\"" + metadata.getOriginalFileName() + "\"";
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
 
-            MediaType mediaType = MediaType.parseMediaType(metadata.getContentType());
+        MediaType mediaType = MediaType.parseMediaType(metadata.getContentType());
 
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .contentLength(metadata.getFileSize())
-                    .contentType(mediaType)
-                    .body(new InputStreamResource(fileStream));
-
-        } catch (ResourceNotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            System.err.println("Download failed for ID " + id + ": " + e.getMessage());
-            return ResponseEntity.internalServerError().build();
-        }
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentLength(metadata.getFileSize())
+                .contentType(mediaType)
+                .body(new InputStreamResource(fileStream));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<FileMetadata> getMetadata(@PathVariable Long id){
-        try {
-            FileMetadata metadata = s3FileService.getMetadata(id);
-            return ResponseEntity.ok(metadata);
-        } catch (ResourceNotFoundException e) {
-            throw e;
-        }
+    public ResponseEntity<FileMetadata> getMetadata(@PathVariable Long id) {
+        FileMetadata metadata = s3FileService.getMetadata(id);
+        return ResponseEntity.ok(metadata);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteFile(@PathVariable Long id){
-        try {
-            s3FileService.deleteFile(id);
-            return ResponseEntity.noContent().build();
-        } catch (ResourceNotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            System.err.println("Deletion failed for ID " + id + ": " + e.getMessage());
-            return  ResponseEntity.internalServerError().build();
-        }
+    public ResponseEntity<Void> deleteFile(@PathVariable Long id) {
+        s3FileService.deleteFile(id);
+        return ResponseEntity.noContent().build();
     }
 }
