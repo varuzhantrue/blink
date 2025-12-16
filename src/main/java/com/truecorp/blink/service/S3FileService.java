@@ -11,8 +11,12 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -21,14 +25,16 @@ import java.util.UUID;
 public class S3FileService {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
     private final FileMetadataRepository fileMetadataRepository;
 
     @Value("${minio.bucket-name}")
     private String bucketName;
 
 
-    public S3FileService(S3Client s3Client, FileMetadataRepository fileMetadataRepository) {
+    public S3FileService(S3Client s3Client, S3Presigner s3Presigner, FileMetadataRepository fileMetadataRepository) {
         this.s3Client = s3Client;
+        this.s3Presigner = s3Presigner;
         this.fileMetadataRepository = fileMetadataRepository;
     }
 
@@ -115,5 +121,27 @@ public class S3FileService {
             log.error("Generic file deletion failed for key: {}: {}", s3ObjectKey, e.getMessage(), e);
             throw new RuntimeException("Deletion failed: " + e.getMessage(), e);
         }
+    }
+
+    public String generatePresignedUrl(Long fileId, Duration expiration) {
+        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
+                .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(fileMetadata.getS3ObjectKey())
+                .responseContentDisposition("attachment; filename=\"" + fileMetadata.getOriginalFileName() + "\"")
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(expiration)
+                .getObjectRequest(getObjectRequest)
+                .build();
+
+        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+
+        log.info("Generated presigned URL for key {} valid for {}", fileMetadata.getS3ObjectKey(), expiration);
+
+        return presignedRequest.url().toExternalForm();
     }
 }
