@@ -12,8 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 
 @RestController
 @RequestMapping("api/files")
@@ -28,7 +28,7 @@ public class FileController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<FileMetadata> uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
+    public ResponseEntity<FileMetadata> uploadFile(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
@@ -66,5 +66,12 @@ public class FileController {
     public ResponseEntity<Void> deleteFile(@PathVariable Long id) {
         s3FileService.deleteFile(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/share")
+    public ResponseEntity<String> shareFile(@PathVariable Long id) {
+        Duration expiration = Duration.ofHours(1);
+        String presignedUrl = s3FileService.generatePresignedUrl(id, expiration);
+        return ResponseEntity.ok(presignedUrl);
     }
 }
