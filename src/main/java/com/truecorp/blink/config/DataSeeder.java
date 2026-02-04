@@ -18,7 +18,7 @@ public class DataSeeder {
                 User admin = new User();
                 admin.setUsername("admin");
                 admin.setPassword(passwordEncoder.encode("password123"));
-                admin.setRoles(Set.of("ROLE_ADMIN"));
+                admin.setRoles(Set.of("ADMIN"));
                 userRepository.save(admin);
                 System.out.println("✅ Default admin user created: admin / password123");
             }
