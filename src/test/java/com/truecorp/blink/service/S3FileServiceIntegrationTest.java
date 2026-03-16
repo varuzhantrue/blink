@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.InputStream;
@@ -16,7 +18,8 @@ import java.io.InputStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@SpringBootTest(properties = "minio.bucket-name=integration-test-bucket")
+@SpringBootTest
+@ActiveProfiles("test")
 public class S3FileServiceIntegrationTest {
 
     @Autowired
@@ -35,6 +38,14 @@ public class S3FileServiceIntegrationTest {
             if (e.statusCode() == 404) {
                 s3Client.createBucket(CreateBucketRequest.builder().bucket(TEST_BUCKET).build());
             }
+        }
+
+        ListObjectsV2Response listObjectsResponse =
+                s3Client.listObjectsV2(builder -> builder.bucket(TEST_BUCKET));
+
+        if (listObjectsResponse.hasContents()) {
+            listObjectsResponse.contents().forEach(object ->
+                    s3Client.deleteObject(builder -> builder.bucket(TEST_BUCKET).key(object.key())));
         }
     }
 
