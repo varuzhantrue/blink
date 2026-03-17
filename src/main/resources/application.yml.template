@@ -18,6 +18,13 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
 
+  docker:
+    compose:
+      enabled: true
+      lifecycle-management: start_only
+      readiness:
+        wait: always
+
 minio:
   url: ${MINIO_URL:http://localhost:9000}
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
