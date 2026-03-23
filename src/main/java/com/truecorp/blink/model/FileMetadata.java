@@ -31,5 +31,9 @@ public class FileMetadata {
     @Column(nullable = false)
     private Instant uploadTimestamp;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
+
     private String shareToken;
 }

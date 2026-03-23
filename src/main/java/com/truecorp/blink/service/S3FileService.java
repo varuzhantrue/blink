@@ -1,10 +1,15 @@
 package com.truecorp.blink.service;
 
+import com.truecorp.blink.dto.FileMetadataResponse;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
+import com.truecorp.blink.model.User;
 import com.truecorp.blink.repository.FileMetadataRepository;
+import com.truecorp.blink.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,20 +32,27 @@ public class S3FileService {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final FileMetadataRepository fileMetadataRepository;
+    private final UserRepository userRepository;
 
     @Value("${minio.bucket-name}")
     private String bucketName;
 
 
-    public S3FileService(S3Client s3Client, S3Presigner s3Presigner, FileMetadataRepository fileMetadataRepository) {
+    public S3FileService(S3Client s3Client, S3Presigner s3Presigner, FileMetadataRepository fileMetadataRepository, UserRepository userRepository) {
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
         this.fileMetadataRepository = fileMetadataRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional
-    public FileMetadata uploadFile(MultipartFile file) {
-        String s3ObjectKey = UUID.randomUUID() + "-" + file.getOriginalFilename();
+    public FileMetadataResponse uploadFile(MultipartFile file) {
+        User currentUser = getAuthenticatedUser();
+
+        String s3ObjectKey = String.format("uploads/%d/%s-%s",
+                currentUser.getId(),
+                UUID.randomUUID(),
+                file.getOriginalFilename());
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
@@ -61,8 +73,9 @@ public class S3FileService {
             metadata.setContentType(file.getContentType());
             metadata.setFileSize(file.getSize());
             metadata.setUploadTimestamp(Instant.now());
+            metadata.setOwner(currentUser);
 
-            return fileMetadataRepository.save(metadata);
+            return mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
         } catch (S3Exception e) {
             log.error("S3 upload failed for file: {}", file.getOriginalFilename(), e);
             throw new RuntimeException("S3 upload failed: " + e.getMessage(), e);
@@ -73,8 +86,7 @@ public class S3FileService {
     }
 
     public InputStream downloadFile(Long fileId) {
-        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+        FileMetadata fileMetadata = getAuthorizedFileMetadata(fileId);
 
         String s3ObjectKey = fileMetadata.getS3ObjectKey();
 
@@ -94,17 +106,16 @@ public class S3FileService {
         }
     }
 
-    public FileMetadata getMetadata(Long fileId) {
-        return fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+    public FileMetadataResponse getMetadata(Long fileId) {
+        FileMetadata fileMetadata = getAuthorizedFileMetadata(fileId);
+        return mapToFileMetadataResponse(fileMetadata);
     }
 
     @Transactional
     public void deleteFile(Long fileId) {
-        FileMetadata metadata = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+        FileMetadata fileMetadata = getAuthorizedFileMetadata(fileId);
 
-        String s3ObjectKey = metadata.getS3ObjectKey();
+        String s3ObjectKey = fileMetadata.getS3ObjectKey();
 
         try {
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
@@ -124,8 +135,7 @@ public class S3FileService {
     }
 
     public String generatePresignedUrl(Long fileId, Duration expiration) {
-        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
-                .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+        FileMetadata fileMetadata = getAuthorizedFileMetadata(fileId);
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
@@ -143,5 +153,39 @@ public class S3FileService {
         log.info("Generated presigned URL for key {} valid for {}", fileMetadata.getS3ObjectKey(), expiration);
 
         return presignedRequest.url().toExternalForm();
+    }
+
+    private FileMetadataResponse mapToFileMetadataResponse(FileMetadata fileMetadata) {
+        return new FileMetadataResponse(
+                fileMetadata.getId(),
+                fileMetadata.getOriginalFileName(),
+                fileMetadata.getS3ObjectKey(),
+                fileMetadata.getContentType(),
+                fileMetadata.getFileSize(),
+                fileMetadata.getUploadTimestamp(),
+                fileMetadata.getOwner().getUsername()
+        );
+    }
+
+    private User getAuthenticatedUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
+    }
+
+    private FileMetadata getAuthorizedFileMetadata(Long fileId) {
+        FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
+                .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+
+        User currentUser = getAuthenticatedUser();
+
+        // Check if the current user is the owner (or an ADMIN)
+        boolean isAdmin = currentUser.getRoles().contains("ROLE_ADMIN");
+        if (!fileMetadata.getOwner().getId().equals(currentUser.getId()) && !isAdmin) {
+            log.warn("User {} attempted unauthorized access to file ID {}", currentUser.getUsername(), fileId);
+            throw new AccessDeniedException("You do not have permission to access this file.");
+        }
+
+        return fileMetadata;
     }
 }

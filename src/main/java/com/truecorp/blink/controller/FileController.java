@@ -1,5 +1,6 @@
 package com.truecorp.blink.controller;
 
+import com.truecorp.blink.dto.FileMetadataResponse;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
 import com.truecorp.blink.repository.FileMetadataRepository;
@@ -28,13 +29,13 @@ public class FileController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<FileMetadata> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<FileMetadataResponse> uploadFile(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
 
-        FileMetadata fileMetadata = s3FileService.uploadFile(file);
-        return new ResponseEntity<>(fileMetadata, HttpStatus.CREATED);
+        FileMetadataResponse fileMetadataResponse = s3FileService.uploadFile(file);
+        return new ResponseEntity<>(fileMetadataResponse, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}/download")
@@ -57,8 +58,8 @@ public class FileController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<FileMetadata> getMetadata(@PathVariable Long id) {
-        FileMetadata metadata = s3FileService.getMetadata(id);
+    public ResponseEntity<FileMetadataResponse> getMetadata(@PathVariable Long id) {
+        FileMetadataResponse metadata = s3FileService.getMetadata(id);
         return ResponseEntity.ok(metadata);
     }
 
