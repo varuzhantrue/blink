@@ -35,3 +35,6 @@ security:
   jwt:
     secret-key: ${JWT_SECRET:placeholder_for_development_only}
     expiration: 86400000 # milliseconds (24h)
+
+blink:
+  retention-period-hours: 24

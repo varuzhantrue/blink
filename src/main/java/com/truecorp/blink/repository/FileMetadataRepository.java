@@ -4,10 +4,14 @@ import com.truecorp.blink.model.FileMetadata;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, Long> {
 
     Optional<FileMetadata> findByS3ObjectKey(String s3ObjectKey);
+
+    List<FileMetadata> findByUploadTimestampBefore(Instant cutOffTime);
 }
