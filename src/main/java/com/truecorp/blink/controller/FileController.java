@@ -1,12 +1,14 @@
 package com.truecorp.blink.controller;
 
 import com.truecorp.blink.dto.FileMetadataResponse;
+import com.truecorp.blink.dto.PresignedUrlResponse;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
 import com.truecorp.blink.repository.FileMetadataRepository;
 import com.truecorp.blink.service.S3FileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,7 +25,7 @@ import java.time.Duration;
 
 @Tag(name = "Files", description = "Upload, download, manage, and share files")
 @RestController
-@RequestMapping("api/files")
+@RequestMapping("/api/files")
 public class FileController {
 
     private final S3FileService s3FileService;
@@ -37,7 +39,7 @@ public class FileController {
     @Operation(summary = "Upload a file")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "File uploaded successfully"),
-            @ApiResponse(responseCode = "400", description = "File is empty"),
+            @ApiResponse(responseCode = "400", description = "File is empty", content = @Content),
             @ApiResponse(responseCode = "401", description = "Unauthorized")
     })
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -114,10 +116,10 @@ public class FileController {
             @ApiResponse(responseCode = "404", description = "File not found")
     })
     @GetMapping("/{id}/share")
-    public ResponseEntity<String> shareFile(
+    public ResponseEntity<PresignedUrlResponse> shareFile(
             @Parameter(description = "File ID") @PathVariable Long id) {
         Duration expiration = Duration.ofHours(1);
         String presignedUrl = s3FileService.generatePresignedUrl(id, expiration);
-        return ResponseEntity.ok(presignedUrl);
+        return ResponseEntity.ok(new PresignedUrlResponse(presignedUrl));
     }
 }
