@@ -40,7 +40,7 @@ public class FileController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "File uploaded successfully"),
             @ApiResponse(responseCode = "400", description = "File is empty", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Unauthorized")
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content)
     })
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<FileMetadataResponse> uploadFile(
@@ -56,9 +56,9 @@ public class FileController {
     @Operation(summary = "Download a file by ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "File content returned"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Access denied - not the file owner"),
-            @ApiResponse(responseCode = "404", description = "File not found")
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Access denied - not the file owner", content = @Content),
+            @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
     })
     @GetMapping("/{id}/download")
     public ResponseEntity<InputStreamResource> downloadFile(
@@ -83,9 +83,9 @@ public class FileController {
     @Operation(summary = "Get file metadata by ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Metadata returned"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Access denied - not the file owner"),
-            @ApiResponse(responseCode = "404", description = "File not found")
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Access denied - not the file owner", content = @Content),
+            @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
     })
     @GetMapping("/{id}")
     public ResponseEntity<FileMetadataResponse> getMetadata(
@@ -111,9 +111,9 @@ public class FileController {
     @Operation(summary = "Generate a presigned download URL (valid 1 hour)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Presigned URL returned"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Access denied - not the file owner"),
-            @ApiResponse(responseCode = "404", description = "File not found")
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Access denied - not the file owner", content = @Content),
+            @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
     })
     @GetMapping("/{id}/share")
     public ResponseEntity<PresignedUrlResponse> shareFile(

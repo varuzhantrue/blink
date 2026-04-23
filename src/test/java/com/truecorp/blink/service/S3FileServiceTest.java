@@ -142,8 +142,8 @@ public class S3FileServiceTest {
         FileMetadataResponse result = s3FileService.uploadFile(multipartFile);
 
         assertNotNull(result);
-        assertTrue(result.s3ObjectKey().startsWith("uploads/1/"));
         assertEquals("testUser", result.ownerUsername());
+        verify(fileMetadataRepository).save(argThat(m -> m.getS3ObjectKey().startsWith("uploads/1/")));
     }
 
     @Test

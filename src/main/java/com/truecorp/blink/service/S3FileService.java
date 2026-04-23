@@ -159,7 +159,6 @@ public class S3FileService {
         return new FileMetadataResponse(
                 fileMetadata.getId(),
                 fileMetadata.getOriginalFileName(),
-                fileMetadata.getS3ObjectKey(),
                 fileMetadata.getContentType(),
                 fileMetadata.getFileSize(),
                 fileMetadata.getUploadTimestamp(),

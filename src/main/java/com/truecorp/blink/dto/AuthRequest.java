@@ -5,9 +5,9 @@ import lombok.Data;
 
 @Data
 public class AuthRequest {
-    @Schema(description = "Account username", example = "admin")
+    @Schema(description = "Account username", example = "admin", requiredMode = Schema.RequiredMode.REQUIRED)
     private String username;
 
-    @Schema(description = "Account password", example = "password123")
+    @Schema(description = "Account password", example = "password123", requiredMode = Schema.RequiredMode.REQUIRED)
     private String password;
 }

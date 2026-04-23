@@ -4,6 +4,7 @@ import com.truecorp.blink.dto.AuthRequest;
 import com.truecorp.blink.dto.AuthResponse;
 import com.truecorp.blink.service.JwtService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -31,7 +32,7 @@ public class AuthController {
     @Operation(summary = "Authenticate and receive a JWT token")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Login successful — token returned"),
-            @ApiResponse(responseCode = "401", description = "Invalid credentials")
+            @ApiResponse(responseCode = "401", description = "Invalid credentials", content = @Content)
     })
     @SecurityRequirements
     @PostMapping("/login")
