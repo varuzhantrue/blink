@@ -18,6 +18,7 @@ for transient sharing, not long-term storage.
 | **Authentication** | JWT + BCrypt Password Hashing             |
 | **Infrastructure** | Docker & Docker Compose                   |
 | **Build Tool**     | Gradle                                    |
+| **API Docs**       | Springdoc OpenAPI / Swagger UI            |
 
 ---
 
@@ -34,6 +35,8 @@ for transient sharing, not long-term storage.
   exposing internal credentials.
 - **Automatic Expiry** - Files are purged hourly once they exceed the retention period (`blink.retention-period-hours`,
   default 24 h). Blink is intended for temporary sharing, not permanent storage.
+- **Interactive API Docs** - Swagger UI is available at `/swagger-ui.html` when the application is running; all
+  endpoints are pre-configured with JWT bearer auth.
 - **Isolated Test Environment** - Maintains fully separate development and integration-test environments, with automated
   database initialization via `init-test-db.sql`.
 
