@@ -1,5 +1,6 @@
 package com.truecorp.blink.config;
 
+import com.truecorp.blink.filter.JwtAuthenticationFilter;
 import com.truecorp.blink.filter.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
