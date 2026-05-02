@@ -1,4 +1,4 @@
-package com.truecorp.blink.config;
+package com.truecorp.blink.filter;
 
 import com.truecorp.blink.service.JwtService;
 import jakarta.servlet.FilterChain;

@@ -21,3 +21,18 @@ services:
       - "9000:9000"
       - "9001:9001"
     command: server /data --console-address ":9001"
+
+  blink-redis:
+    image: redis:7-alpine
+    container_name: blink-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save ""
+
+  blink-redis-ui:
+    image: redis/redisinsight:latest
+    container_name: blink-redis-ui
+    ports:
+      - "5540:5540"
+    depends_on:
+      - blink-redis

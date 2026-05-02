@@ -18,6 +18,11 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
   docker:
     compose:
       enabled: true
@@ -38,3 +43,10 @@ security:
 
 blink:
   retention-period-hours: 24
+  rate-limit:
+    upload:
+      requests: 10
+      window-seconds: 60
+    download:
+      requests: 30
+      window-seconds: 60
