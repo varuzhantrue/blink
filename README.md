@@ -9,16 +9,17 @@ for transient sharing, not long-term storage.
 
 ## Tech Stack
 
-| Layer              | Technology                                |
-|:-------------------|:------------------------------------------|
-| **Language**       | Java 21                                   |
-| **Framework**      | Spring Boot 3.x (Web, Security, Data JPA) |
-| **Object Storage** | MinIO (S3-Compatible)                     |
-| **Database**       | PostgreSQL                                |
-| **Authentication** | JWT + BCrypt Password Hashing             |
-| **Infrastructure** | Docker & Docker Compose                   |
-| **Build Tool**     | Gradle                                    |
-| **API Docs**       | Springdoc OpenAPI / Swagger UI            |
+| Layer                     | Technology                                |
+|:--------------------------|:------------------------------------------|
+| **Language**              | Java 21                                   |
+| **Framework**             | Spring Boot 3.x (Web, Security, Data JPA) |
+| **Object Storage**        | MinIO (S3-Compatible)                     |
+| **Database**              | PostgreSQL                                |
+| **Cache / Rate Limiting** | Redis                                     |
+| **Authentication**        | JWT + BCrypt Password Hashing             |
+| **Infrastructure**        | Docker & Docker Compose                   |
+| **Build Tool**            | Gradle                                    |
+| **API Docs**              | Springdoc OpenAPI / Swagger UI            |
 
 ---
 
@@ -35,6 +36,10 @@ for transient sharing, not long-term storage.
   exposing internal credentials.
 - **Automatic Expiry** - Files are purged hourly once they exceed the retention period (`blink.retention-period-hours`,
   default 24 h). Blink is intended for temporary sharing, not permanent storage.
+- **Per-User Rate Limiting** - Upload and download endpoints are protected by a Redis-backed sliding-window rate
+  limiter.
+  Limits are configurable via `blink.rate-limit.upload` and `blink.rate-limit.download` (default: 10 uploads / 60 s,
+  30 downloads / 60 s). Exceeding the limit returns `429 Too Many Requests`.
 - **Interactive API Docs** - Swagger UI is available at `/swagger-ui.html` when the application is running; all
   endpoints are pre-configured with JWT bearer auth.
 - **Isolated Test Environment** - Maintains fully separate development and integration-test environments, with automated
@@ -95,9 +100,17 @@ Start the application:
 
 On startup, the application will automatically:
 
-- Pull and start **PostgreSQL** and **MinIO** containers via Docker Compose.
+- Pull and start **PostgreSQL**, **MinIO**, and **Redis** containers via Docker Compose.
 - Initialize the `blinkdb` and `blink_test` databases using `init-test-db.sql`.
 - Verify S3 bucket availability before the server starts.
+
+### Local Dev Tools
+
+| Tool          | URL                     | Purpose                                         |
+|:--------------|:------------------------|:------------------------------------------------|
+| MinIO Console | `http://localhost:9001` | Browse buckets and objects                      |
+| RedisInsight  | `http://localhost:5540` | Inspect Redis keys and monitor rate-limit state |
+| Swagger UI    | `/swagger-ui.html`      | Interactive API docs with JWT auth              |
 
 ---
 
