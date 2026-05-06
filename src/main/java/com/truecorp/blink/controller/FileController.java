@@ -40,7 +40,8 @@ public class FileController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "File uploaded successfully"),
             @ApiResponse(responseCode = "400", description = "File is empty", content = @Content),
-            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content)
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
     })
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<FileMetadataResponse> uploadFile(
@@ -58,7 +59,8 @@ public class FileController {
             @ApiResponse(responseCode = "200", description = "File content returned"),
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied - not the file owner", content = @Content),
-            @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
+            @ApiResponse(responseCode = "404", description = "File not found", content = @Content),
+            @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
     })
     @GetMapping("/{id}/download")
     public ResponseEntity<InputStreamResource> downloadFile(
