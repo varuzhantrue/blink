@@ -17,6 +17,7 @@ for transient sharing, not long-term storage.
 | **Database**              | PostgreSQL                                |
 | **Cache / Rate Limiting** | Redis                                     |
 | **Authentication**        | JWT + BCrypt Password Hashing             |
+| **DB Migrations**         | Flyway                                    |
 | **Infrastructure**        | Docker & Docker Compose                   |
 | **Build Tool**            | Gradle                                    |
 | **API Docs**              | Springdoc OpenAPI / Swagger UI            |
@@ -42,8 +43,10 @@ for transient sharing, not long-term storage.
   30 downloads / 60 s). Exceeding the limit returns `429 Too Many Requests`.
 - **Interactive API Docs** - Swagger UI is available at `/swagger-ui.html` when the application is running; all
   endpoints are pre-configured with JWT bearer auth.
-- **Isolated Test Environment** - Maintains fully separate development and integration-test environments, with automated
-  database initialization via `init-test-db.sql`.
+- **Versioned Schema Migrations** - Database schema is managed by Flyway. Migrations in `db/migration/` are applied
+  in order on startup and never re-run, replacing Hibernate DDL auto-generation in production.
+- **Isolated Test Environment** - Maintains fully separate development and integration-test environments. The test
+  profile disables Flyway and uses Hibernate `create-drop` against a dedicated `blink_test` database.
 
 ---
 
