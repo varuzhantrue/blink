@@ -20,6 +20,10 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,16 +37,28 @@ public class S3FileService {
     private final S3Presigner s3Presigner;
     private final FileMetadataRepository fileMetadataRepository;
     private final UserRepository userRepository;
+    private final Timer uploadTimer;
+    private final Counter downloadCounter;
+    private final Counter deleteCounter;
 
     @Value("${minio.bucket-name}")
     private String bucketName;
 
-
-    public S3FileService(S3Client s3Client, S3Presigner s3Presigner, FileMetadataRepository fileMetadataRepository, UserRepository userRepository) {
+    public S3FileService(S3Client s3Client, S3Presigner s3Presigner, FileMetadataRepository fileMetadataRepository,
+                         UserRepository userRepository, MeterRegistry meterRegistry) {
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
         this.fileMetadataRepository = fileMetadataRepository;
         this.userRepository = userRepository;
+        this.uploadTimer = Timer.builder("blink.files.upload.duration")
+                .description("Time taken to upload a file to MinIO")
+                .register(meterRegistry);
+        this.downloadCounter = Counter.builder("blink.files.downloads")
+                .description("Total number of file downloads")
+                .register(meterRegistry);
+        this.deleteCounter = Counter.builder("blink.files.deletes")
+                .description("Total number of file deletions")
+                .register(meterRegistry);
     }
 
     @Transactional
@@ -62,20 +78,22 @@ public class S3FileService {
                 .build();
 
         try {
-            s3Client.putObject(
-                    putObjectRequest,
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize())
-            );
+            return uploadTimer.recordCallable(() -> {
+                s3Client.putObject(
+                        putObjectRequest,
+                        RequestBody.fromInputStream(file.getInputStream(), file.getSize())
+                );
 
-            FileMetadata metadata = new FileMetadata();
-            metadata.setOriginalFileName(file.getOriginalFilename());
-            metadata.setS3ObjectKey(s3ObjectKey);
-            metadata.setContentType(file.getContentType());
-            metadata.setFileSize(file.getSize());
-            metadata.setUploadTimestamp(Instant.now());
-            metadata.setOwner(currentUser);
+                FileMetadata metadata = new FileMetadata();
+                metadata.setOriginalFileName(file.getOriginalFilename());
+                metadata.setS3ObjectKey(s3ObjectKey);
+                metadata.setContentType(file.getContentType());
+                metadata.setFileSize(file.getSize());
+                metadata.setUploadTimestamp(Instant.now());
+                metadata.setOwner(currentUser);
 
-            return mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
+                return mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
+            });
         } catch (S3Exception e) {
             log.error("S3 upload failed for file: {}", file.getOriginalFilename(), e);
             throw new RuntimeException("S3 upload failed: " + e.getMessage(), e);
@@ -96,7 +114,9 @@ public class S3FileService {
                     .key(s3ObjectKey)
                     .build();
 
-            return s3Client.getObject(getObjectRequest);
+            InputStream stream = s3Client.getObject(getObjectRequest);
+            downloadCounter.increment();
+            return stream;
         } catch (S3Exception e) {
             log.error("S3 download failed for file: {}", fileMetadata.getOriginalFileName(), e);
             throw new ResourceNotFoundException("File not found in storage with key: " + s3ObjectKey);
@@ -125,6 +145,7 @@ public class S3FileService {
 
             s3Client.deleteObject(deleteObjectRequest);
             fileMetadataRepository.deleteById(fileId);
+            deleteCounter.increment();
         } catch (S3Exception e) {
             log.error("S3 file deletion failed for key: {}: {}", s3ObjectKey, e.getMessage(), e);
             throw new RuntimeException("S3 file deletion failed: " + e.getMessage(), e);
