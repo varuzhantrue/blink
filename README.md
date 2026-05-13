@@ -21,6 +21,7 @@ for transient sharing, not long-term storage.
 | **Infrastructure**        | Docker & Docker Compose                   |
 | **Build Tool**            | Gradle                                    |
 | **API Docs**              | Springdoc OpenAPI / Swagger UI            |
+| **Observability**         | Spring Actuator + Micrometer (Prometheus) |
 
 ---
 
@@ -45,6 +46,9 @@ for transient sharing, not long-term storage.
   endpoints are pre-configured with JWT bearer auth.
 - **Versioned Schema Migrations** - Database schema is managed by Flyway. Migrations in `db/migration/` are applied
   in order on startup and never re-run, replacing Hibernate DDL auto-generation in production.
+- **Observability** - Exposes health probes (`/actuator/health`) with a custom MinIO connectivity check alongside
+  standard DB, Redis, and disk indicators. Prometheus-ready metrics (`/actuator/prometheus`) track upload duration,
+  download count, and delete count via Micrometer.
 - **Isolated Test Environment** - Maintains fully separate development and integration-test environments. The test
   profile disables Flyway and uses Hibernate `create-drop` against a dedicated `blink_test` database.
 

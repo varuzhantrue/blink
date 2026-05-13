@@ -6,10 +6,10 @@ import com.truecorp.blink.model.FileMetadata;
 import com.truecorp.blink.model.User;
 import com.truecorp.blink.repository.FileMetadataRepository;
 import com.truecorp.blink.repository.UserRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -17,7 +17,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -59,7 +58,6 @@ public class S3FileServiceTest {
     @Mock
     private SecurityContext securityContext;
 
-    @InjectMocks
     private S3FileService s3FileService;
 
     private FileMetadata sampleMetadata;
@@ -67,7 +65,14 @@ public class S3FileServiceTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(s3FileService, "bucketName", "test-bucket");
+        s3FileService = new S3FileService(
+                s3Client,
+                s3Presigner,
+                fileMetadataRepository,
+                userRepository,
+                new SimpleMeterRegistry(),
+                "test-bucket"
+        );
 
         sampleUser = new User();
         sampleUser.setId(1L);
