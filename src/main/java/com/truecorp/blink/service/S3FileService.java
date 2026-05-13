@@ -40,16 +40,21 @@ public class S3FileService {
     private final Timer uploadTimer;
     private final Counter downloadCounter;
     private final Counter deleteCounter;
+    private final String bucketName;
 
-    @Value("${minio.bucket-name}")
-    private String bucketName;
-
-    public S3FileService(S3Client s3Client, S3Presigner s3Presigner, FileMetadataRepository fileMetadataRepository,
-                         UserRepository userRepository, MeterRegistry meterRegistry) {
+    public S3FileService(
+            S3Client s3Client,
+            S3Presigner s3Presigner,
+            FileMetadataRepository fileMetadataRepository,
+            UserRepository userRepository,
+            MeterRegistry meterRegistry,
+            @Value("${minio.bucket-name}") String bucketName
+    ) {
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
         this.fileMetadataRepository = fileMetadataRepository;
         this.userRepository = userRepository;
+        this.bucketName = bucketName;
         this.uploadTimer = Timer.builder("blink.files.upload.duration")
                 .description("Time taken to upload a file to MinIO")
                 .register(meterRegistry);
