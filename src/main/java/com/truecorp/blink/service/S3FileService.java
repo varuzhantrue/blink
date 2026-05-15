@@ -27,6 +27,7 @@ import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -131,6 +132,22 @@ public class S3FileService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public List<FileMetadataResponse> listFiles(boolean all) {
+        User currentUser = getAuthenticatedUser();
+        boolean isAdmin = isCurrentUserAdmin();
+
+        if (all && !isAdmin) {
+            throw new AccessDeniedException("Only admins can list all files.");
+        }
+
+        List<FileMetadata> files = all
+                ? fileMetadataRepository.findAll()
+                : fileMetadataRepository.findByOwner(currentUser);
+
+        return files.stream().map(this::mapToFileMetadataResponse).toList();
+    }
+
     public FileMetadataResponse getMetadata(Long fileId) {
         FileMetadata fileMetadata = getAuthorizedFileMetadata(fileId);
         return mapToFileMetadataResponse(fileMetadata);
@@ -198,6 +215,11 @@ public class S3FileService {
                 .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
     }
 
+    private boolean isCurrentUserAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
     private FileMetadata getAuthorizedFileMetadata(Long fileId) {
         FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
@@ -205,7 +227,7 @@ public class S3FileService {
         User currentUser = getAuthenticatedUser();
 
         // Check if the current user is the owner (or an ADMIN)
-        boolean isAdmin = currentUser.getRoles().contains("ROLE_ADMIN");
+        boolean isAdmin = isCurrentUserAdmin();
         if (!fileMetadata.getOwner().getId().equals(currentUser.getId()) && !isAdmin) {
             log.warn("User {} attempted unauthorized access to file ID {}", currentUser.getUsername(), fileId);
             throw new AccessDeniedException("You do not have permission to access this file.");

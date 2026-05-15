@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.List;
 
 @Tag(name = "Files", description = "Upload, download, manage, and share files")
 @RestController
@@ -34,6 +35,22 @@ public class FileController {
     public FileController(S3FileService s3FileService, FileMetadataRepository fileMetadataRepository) {
         this.s3FileService = s3FileService;
         this.fileMetadataRepository = fileMetadataRepository;
+    }
+
+    @Operation(summary = "List files",
+            description = "Returns the caller's files. Admins may pass ?all=true to list every user's files.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "File list returned"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Access denied - ?all=true requires ADMIN role",
+                    content = @Content),
+            @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
+    })
+    @GetMapping
+    public ResponseEntity<List<FileMetadataResponse>> listFiles(
+            @Parameter(description = "Set to true to list all users' files (admin only)")
+            @RequestParam(defaultValue = "false") boolean all) {
+        return ResponseEntity.ok(s3FileService.listFiles(all));
     }
 
     @Operation(summary = "Upload a file")

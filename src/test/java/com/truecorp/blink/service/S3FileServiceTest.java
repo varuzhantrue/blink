@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -31,6 +32,7 @@ import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -93,7 +95,20 @@ public class S3FileServiceTest {
     private void mockAuthentication(String username) {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.getName()).thenReturn(username);
+        lenient().when(authentication.getAuthorities()).thenAnswer(i -> Collections.emptyList());
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(sampleUser));
+    }
+
+    private void mockAdminAuthentication(String username) {
+        User admin = new User();
+        admin.setId(99L);
+        admin.setUsername(username);
+        admin.setRoles(Set.of("ROLE_ADMIN"));
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getName()).thenReturn(username);
+        when(authentication.getAuthorities()).thenAnswer(i -> List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(admin));
     }
 
     @Test
@@ -213,14 +228,7 @@ public class S3FileServiceTest {
 
     @Test
     void deleteFile_ShouldWorkForAdmin_EvenIfNotOwner() {
-        User admin = new User();
-        admin.setId(99L);
-        admin.setRoles(Set.of("ROLE_ADMIN"));
-
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("adminUser");
-        when(userRepository.findByUsername("adminUser")).thenReturn(Optional.of(admin));
-
+        mockAdminAuthentication("adminUser");
         when(fileMetadataRepository.findById(1L)).thenReturn(Optional.of(sampleMetadata));
 
         assertDoesNotThrow(() -> s3FileService.deleteFile(1L));
@@ -254,6 +262,49 @@ public class S3FileServiceTest {
         );
 
         assertTrue(exception.getMessage().contains("S3 file deletion failed"));
+    }
+
+    @Test
+    void listFiles_ShouldReturnOwnFilesForRegularUser() {
+        mockAuthentication("testUser");
+        when(fileMetadataRepository.findByOwner(sampleUser)).thenReturn(List.of(sampleMetadata));
+
+        List<FileMetadataResponse> result = s3FileService.listFiles(false);
+
+        assertEquals(1, result.size());
+        assertEquals("test.txt", result.getFirst().originalFileName());
+        verify(fileMetadataRepository).findByOwner(sampleUser);
+        verify(fileMetadataRepository, never()).findAll();
+    }
+
+    @Test
+    void listFiles_ShouldReturnAllFilesForAdmin_WhenAllIsTrue() {
+        mockAdminAuthentication("adminUser");
+
+        FileMetadata otherFile = new FileMetadata();
+        otherFile.setId(2L);
+        otherFile.setOriginalFileName("other.txt");
+        otherFile.setS3ObjectKey("uploads/2/uuid-other.txt");
+        otherFile.setFileSize(5L);
+        otherFile.setContentType("text/plain");
+        otherFile.setOwner(sampleUser);
+
+        when(fileMetadataRepository.findAll()).thenReturn(List.of(sampleMetadata, otherFile));
+
+        List<FileMetadataResponse> result = s3FileService.listFiles(true);
+
+        assertEquals(2, result.size());
+        verify(fileMetadataRepository).findAll();
+        verify(fileMetadataRepository, never()).findByOwner(any());
+    }
+
+    @Test
+    void listFiles_ShouldThrowAccessDenied_WhenNonAdminRequestsAll() {
+        mockAuthentication("testUser");
+
+        assertThrows(AccessDeniedException.class, () -> s3FileService.listFiles(true));
+        verify(fileMetadataRepository, never()).findAll();
+        verify(fileMetadataRepository, never()).findByOwner(any());
     }
 
     @Test
