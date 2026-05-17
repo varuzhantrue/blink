@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -125,15 +128,13 @@ public class S3FileServiceIntegrationTest {
         MockMultipartFile myFile = new MockMultipartFile("file", "mine.txt", "text/plain", "x".getBytes());
         s3FileService.uploadFile(myFile);
 
-        org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                        OTHER_USERNAME, null, List.of()));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(OTHER_USERNAME, null, List.of()));
         MockMultipartFile otherFile = new MockMultipartFile("file", "theirs.txt", "text/plain", "y".getBytes());
         s3FileService.uploadFile(otherFile);
 
-        org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                        TEST_USERNAME, null, List.of()));
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(TEST_USERNAME, null, List.of()));
 
         List<FileMetadataResponse> result = s3FileService.listFiles(false);
 
@@ -156,7 +157,7 @@ public class S3FileServiceIntegrationTest {
     @Test
     @WithMockUser(username = TEST_USERNAME)
     void listFiles_ShouldThrowAccessDenied_WhenNonAdminRequestsAll() {
-        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+        assertThrows(AccessDeniedException.class,
                 () -> s3FileService.listFiles(true));
     }
 }
