@@ -4,6 +4,7 @@ import com.truecorp.blink.exception.ResourceNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -26,6 +27,23 @@ public class GlobalExceptionHandler {
 
         Map<String, Object> body = createErrorBody(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage());
         return new ResponseEntity<>(body, HttpStatus.NOT_FOUND);
+    }
+
+    /**
+     * Handles AccessDeniedException thrown manually in service methods and returns a 403 FORBIDDEN.
+     * Note: Spring Security's ExceptionTranslationFilter only intercepts this exception when thrown
+     * by method security (@PreAuthorize etc.); manual throws propagate here as normal exceptions.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseBody
+    public ResponseEntity<Object> handleAccessDeniedException(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
+
+        Map<String, Object> body = createErrorBody(
+                HttpStatus.FORBIDDEN,
+                "Forbidden",
+                ex.getMessage());
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
     /**
