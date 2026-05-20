@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -12,10 +14,26 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @ControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    /**
+     * Handles @Valid failures on @RequestBody parameters and returns a 400 BAD REQUEST with
+     * a comma-separated list of violated field constraints.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseBody
+    public ResponseEntity<Object> handleValidationException(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+
+        Map<String, Object> body = createErrorBody(HttpStatus.BAD_REQUEST, "Bad Request", message);
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
 
     /**
      * Handles ResourceNotFoundException and returns a 404 NOT FOUND status.
