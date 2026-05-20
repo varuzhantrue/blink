@@ -49,6 +49,8 @@ for transient sharing, not long-term storage.
 - **Observability** - Exposes health probes (`/actuator/health`) with a custom MinIO connectivity check alongside
   standard DB, Redis, and disk indicators. Prometheus-ready metrics (`/actuator/prometheus`) track upload duration,
   download count, and delete count via Micrometer.
+- **Input Validation** - Request DTOs are validated via Bean Validation (`@NotBlank`, `@Size`). Constraint violations
+  return a structured `400 Bad Request` with a descriptive message before reaching the service layer.
 - **Isolated Test Environment** - Maintains fully separate development and integration-test environments. The test
   profile disables Flyway and uses Hibernate `create-drop` against a dedicated `blink_test` database.
 
@@ -61,6 +63,7 @@ All file operations require a valid JWT provided in the `Authorization: Bearer <
 | Method   | Endpoint                   | Description                                                                                    | Access        |
 |:---------|:---------------------------|:-----------------------------------------------------------------------------------------------|:--------------|
 | `POST`   | `/api/auth/login`          | Authenticate user credentials and receive a JWT.                                               | Public        |
+| `GET`    | `/api/files`               | List files. Admins may pass `?all=true` to list every user's files.                            | Authenticated |
 | `POST`   | `/api/files/upload`        | Upload a file (`multipart/form-data`) to the storage bucket.                                   | Authenticated |
 | `GET`    | `/api/files/{id}`          | Retrieve file metadata (original name, size, upload timestamp).                                | Authenticated |
 | `GET`    | `/api/files/{id}/download` | Stream the file content directly for download.                                                 | Authenticated |
