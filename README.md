@@ -1,5 +1,7 @@
 # Blink 🚀
 
+[![CI](https://github.com/varuzhantrue/blink/actions/workflows/ci.yml/badge.svg)](https://github.com/varuzhantrue/blink/actions/workflows/ci.yml)
+
 **Blink** is a high-performance, temporary file-sharing REST API built to simulate a production-grade cloud ecosystem.
 It provides secure, S3-compatible object storage with automated infrastructure management and stateless JWT-based
 authentication. Files are automatically purged after a configurable retention period (default 24 h) - Blink is designed
