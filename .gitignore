@@ -37,6 +37,4 @@ out/
 .vscode/
 
 # Exclude compiled binaries
-gradle/wrapper/gradle-wrapper.jar
-
 src/main/resources/application.yml
