@@ -51,6 +51,9 @@ jobs:
             echo "Waiting for MinIO to be ready..."; sleep 2
           done
 
+      - name: Create application.yml from template
+        run: cp src/main/resources/application.yml.template src/main/resources/application.yml
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
