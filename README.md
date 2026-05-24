@@ -102,13 +102,29 @@ _Blink uses environment variables with sensible defaults for local development._
 
 ### Running the Application
 
+#### Option A — Full Docker stack (recommended)
+
+Builds the app image and starts all services (PostgreSQL, MinIO, Redis, and the app itself) with a single command:
+
+```bash
+docker compose up --build
+```
+
+The API will be available at `http://localhost:8080`. To stop everything:
+
+```bash
+docker compose down
+```
+
+#### Option B — Local development with Gradle
+
 Blink uses Spring Boot Docker Compose Support, so infrastructure containers are managed automatically.
 
 Start the application:
 
-   ```bash
-   ./gradlew bootRun
-   ```
+```bash
+./gradlew bootRun
+```
 
 On startup, the application will automatically:
 
