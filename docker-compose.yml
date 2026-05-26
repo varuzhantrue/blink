@@ -42,6 +42,7 @@ services:
     container_name: blink-app
     ports:
       - "8080:8080"
+      - "8081:8081"
     environment:
       - DB_URL=jdbc:postgresql://blink-db:5432/blinkdb
       - DB_USERNAME=user
@@ -54,3 +55,13 @@ services:
       - blink-db
       - blink-minio
       - blink-redis
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: blink-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - blink-app
