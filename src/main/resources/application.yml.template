@@ -42,6 +42,8 @@ security:
     expiration: 86400000 # milliseconds (24h)
 
 management:
+  server:
+    port: 8081
   endpoints:
     web:
       exposure:
