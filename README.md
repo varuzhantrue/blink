@@ -104,13 +104,15 @@ _Blink uses environment variables with sensible defaults for local development._
 
 #### Option A — Full Docker stack (recommended)
 
-Builds the app image and starts all services (PostgreSQL, MinIO, Redis, and the app itself) with a single command:
+Builds the app image and starts all services (PostgreSQL, MinIO, Redis, Prometheus, and the app itself) with a single
+command:
 
 ```bash
 docker compose up --build
 ```
 
-The API will be available at `http://localhost:8080`. To stop everything:
+The API will be available at `http://localhost:8080`. Actuator/management endpoints are on `http://localhost:8081`. To
+stop everything:
 
 ```bash
 docker compose down
@@ -139,6 +141,7 @@ On startup, the application will automatically:
 | MinIO Console | `http://localhost:9001` | Browse buckets and objects                      |
 | RedisInsight  | `http://localhost:5540` | Inspect Redis keys and monitor rate-limit state |
 | Swagger UI    | `/swagger-ui.html`      | Interactive API docs with JWT auth              |
+| Prometheus    | `http://localhost:9090` | Metrics explorer and scrape target status       |
 
 ---
 
