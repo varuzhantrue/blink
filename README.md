@@ -30,8 +30,8 @@ for transient sharing, not long-term storage.
 ## Features
 
 - **S3-Compatible Storage** - Full integration with MinIO for robust file handling.
-- **Zero-Touch Infrastructure** - Uses `spring-boot-docker-compose` to automatically start PostgreSQL and MinIO
-  containers alongside the application; no manual `docker-compose up` required.
+- **Zero-Touch Infrastructure** - Uses `spring-boot-docker-compose` to automatically start infra containers
+  (PostgreSQL, MinIO, Redis) via `compose.yml` alongside the application; no manual `docker compose up` required.
 - **Stateless Security** - Enforces `STATELESS` session policy via a custom JWT filter chain, eliminating server-side
   session state entirely.
 - **Collision-Safe File Mapping** - Stores files in MinIO under UUID-based object keys while preserving original
@@ -109,19 +109,20 @@ Builds the app image and starts all services (PostgreSQL, MinIO, Redis, Promethe
 command:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml up --build
 ```
 
 The API will be available at `http://localhost:8080`. Actuator/management endpoints are on `http://localhost:8081`. To
 stop everything:
 
 ```bash
-docker compose down
+docker compose -f docker-compose.yml down
 ```
 
 #### Option B — Local development with Gradle
 
-Blink uses Spring Boot Docker Compose Support, so infrastructure containers are managed automatically.
+Blink uses Spring Boot Docker Compose Support, so infrastructure containers are managed automatically via `compose.yml`
+(infra only - no port conflict with the locally running app).
 
 Start the application:
 
@@ -131,7 +132,7 @@ Start the application:
 
 On startup, the application will automatically:
 
-- Pull and start **PostgreSQL**, **MinIO**, and **Redis** containers via Docker Compose.
+- Pull and start **PostgreSQL**, **MinIO**, and **Redis** containers via `compose.yml`.
 - Initialize the `blinkdb` and `blink_test` databases using `init-test-db.sql`.
 - Verify S3 bucket availability before the server starts.
 
@@ -142,7 +143,7 @@ On startup, the application will automatically:
 | MinIO Console | `http://localhost:9001` | Browse buckets and objects                      |
 | RedisInsight  | `http://localhost:5540` | Inspect Redis keys and monitor rate-limit state |
 | Swagger UI    | `/swagger-ui.html`      | Interactive API docs with JWT auth              |
-| Prometheus    | `http://localhost:9090` | Metrics explorer and scrape target status       |
+| Prometheus    | `http://localhost:9090` | Metrics explorer (full stack only - Option A)   |
 
 ---
 
