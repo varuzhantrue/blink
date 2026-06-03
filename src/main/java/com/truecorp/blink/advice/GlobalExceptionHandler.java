@@ -1,6 +1,7 @@
 package com.truecorp.blink.advice;
 
 import com.truecorp.blink.exception.ResourceNotFoundException;
+import com.truecorp.blink.exception.UsernameAlreadyExistsException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -62,6 +63,23 @@ public class GlobalExceptionHandler {
                 "Forbidden",
                 ex.getMessage());
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * Handles UsernameAlreadyExistsException thrown during signup and returns a 409 CONFLICT.
+     * Needs an explicit handler because the catch-all RuntimeException handler below would
+     * otherwise swallow it with a 500.
+     */
+    @ExceptionHandler(UsernameAlreadyExistsException.class)
+    @ResponseBody
+    public ResponseEntity<Object> handleUsernameAlreadyExists(UsernameAlreadyExistsException ex) {
+        log.warn("Signup conflict: {}", ex.getMessage());
+
+        Map<String, Object> body = createErrorBody(
+                HttpStatus.CONFLICT,
+                "Conflict",
+                ex.getMessage());
+        return new ResponseEntity<>(body, HttpStatus.CONFLICT);
     }
 
     /**

@@ -64,6 +64,7 @@ All file operations require a valid JWT provided in the `Authorization: Bearer <
 
 | Method   | Endpoint                   | Description                                                                                    | Access        |
 |:---------|:---------------------------|:-----------------------------------------------------------------------------------------------|:--------------|
+| `POST`   | `/api/auth/signup`         | Register a new user account. Returns a JWT on success, auto-logging the user in.               | Public        |
 | `POST`   | `/api/auth/login`          | Authenticate user credentials and receive a JWT.                                               | Public        |
 | `GET`    | `/api/files`               | List files. Admins may pass `?all=true` to list every user's files.                            | Authenticated |
 | `POST`   | `/api/files/upload`        | Upload a file (`multipart/form-data`) to the storage bucket.                                   | Authenticated |
