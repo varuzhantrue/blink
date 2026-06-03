@@ -1,0 +1,43 @@
+services:
+  blink-db:
+    image: postgres:latest
+    container_name: blink-postgres
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=blinkdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d blinkdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  blink-minio:
+    image: quay.io/minio/minio:latest
+    container_name: blink-minio
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+
+  blink-redis:
+    image: redis:7-alpine
+    container_name: blink-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save ""
+
+  blink-redis-ui:
+    image: redis/redisinsight:latest
+    container_name: blink-redis-ui
+    ports:
+      - "5540:5540"
+    depends_on:
+      - blink-redis
