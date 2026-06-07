@@ -3,6 +3,7 @@ package com.truecorp.blink.service;
 import com.truecorp.blink.dto.FileMetadataResponse;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
+import com.truecorp.blink.model.UploadStatus;
 import com.truecorp.blink.model.User;
 import com.truecorp.blink.repository.FileMetadataRepository;
 import com.truecorp.blink.repository.UserRepository;
@@ -97,6 +98,7 @@ public class S3FileService {
                 metadata.setFileSize(file.getSize());
                 metadata.setUploadTimestamp(Instant.now());
                 metadata.setOwner(currentUser);
+                metadata.setUploadStatus(UploadStatus.COMPLETE);
 
                 return mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
             });
@@ -142,8 +144,8 @@ public class S3FileService {
         }
 
         List<FileMetadata> files = all
-                ? fileMetadataRepository.findAll()
-                : fileMetadataRepository.findByOwner(currentUser);
+                ? fileMetadataRepository.findByUploadStatus(UploadStatus.COMPLETE)
+                : fileMetadataRepository.findByOwnerAndUploadStatus(currentUser, UploadStatus.COMPLETE);
 
         return files.stream().map(this::mapToFileMetadataResponse).toList();
     }
@@ -223,6 +225,10 @@ public class S3FileService {
     private FileMetadata getAuthorizedFileMetadata(Long fileId) {
         FileMetadata fileMetadata = fileMetadataRepository.findById(fileId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found with ID: " + fileId));
+
+        if (fileMetadata.getUploadStatus() != UploadStatus.COMPLETE) {
+            throw new ResourceNotFoundException("File not found with ID: " + fileId);
+        }
 
         User currentUser = getAuthenticatedUser();
 

@@ -1,20 +1,20 @@
 package com.truecorp.blink.repository;
 
 import com.truecorp.blink.model.FileMetadata;
+import com.truecorp.blink.model.UploadStatus;
 import com.truecorp.blink.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, Long> {
 
-    Optional<FileMetadata> findByS3ObjectKey(String s3ObjectKey);
+    List<FileMetadata> findByOwnerAndUploadStatus(User owner, UploadStatus uploadStatus);
 
-    List<FileMetadata> findByUploadTimestampBefore(Instant cutOffTime);
+    List<FileMetadata> findByUploadStatus(UploadStatus uploadStatus);
 
-    List<FileMetadata> findByOwner(User owner);
+    List<FileMetadata> findByUploadStatusAndUploadTimestampBefore(UploadStatus uploadStatus, Instant cutoffTime);
 }

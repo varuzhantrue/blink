@@ -1,6 +1,7 @@
 package com.truecorp.blink.service;
 
 import com.truecorp.blink.model.FileMetadata;
+import com.truecorp.blink.model.UploadStatus;
 import com.truecorp.blink.repository.FileMetadataRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +38,8 @@ public class FileCleanupService {
         log.info("Starting scheduled cleanup of expired files...");
 
         Instant cutoffTime = Instant.now().minus(Duration.ofHours(retentionPeriodHours));
-        List<FileMetadata> expiredFiles = fileMetadataRepository.findByUploadTimestampBefore(cutoffTime);
+        List<FileMetadata> expiredFiles = fileMetadataRepository.findByUploadStatusAndUploadTimestampBefore(
+                UploadStatus.COMPLETE, cutoffTime);
 
         if (expiredFiles.isEmpty()) {
             log.info("No expired files found for cleanup.");
