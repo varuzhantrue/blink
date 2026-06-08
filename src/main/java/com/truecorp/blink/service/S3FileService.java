@@ -1,6 +1,9 @@
 package com.truecorp.blink.service;
 
 import com.truecorp.blink.dto.FileMetadataResponse;
+import com.truecorp.blink.dto.MultipartCompleteRequest;
+import com.truecorp.blink.dto.MultipartInitiateRequest;
+import com.truecorp.blink.dto.MultipartInitiateResponse;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
 import com.truecorp.blink.model.UploadStatus;
@@ -20,6 +23,7 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -198,6 +202,121 @@ public class S3FileService {
         log.info("Generated presigned URL for key {} valid for {}", fileMetadata.getS3ObjectKey(), expiration);
 
         return presignedRequest.url().toExternalForm();
+    }
+
+    @Transactional
+    public MultipartInitiateResponse initiateMultipartUpload(MultipartInitiateRequest request) {
+        User currentUser = getAuthenticatedUser();
+
+        String s3ObjectKey = String.format("uploads/%d/%s-%s",
+                currentUser.getId(),
+                UUID.randomUUID(),
+                request.fileName());
+
+        CreateMultipartUploadRequest createRequest = CreateMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(s3ObjectKey)
+                .contentType(request.contentType())
+                .build();
+
+        String uploadId = s3Client.createMultipartUpload(createRequest).uploadId();
+
+        FileMetadata metadata = new FileMetadata();
+        metadata.setOriginalFileName(request.fileName());
+        metadata.setS3ObjectKey(s3ObjectKey);
+        metadata.setContentType(request.contentType());
+        metadata.setFileSize(request.fileSize());
+        metadata.setUploadTimestamp(Instant.now());
+        metadata.setOwner(currentUser);
+        metadata.setUploadStatus(UploadStatus.PENDING);
+        metadata.setUploadId(uploadId);
+        Long fileId = fileMetadataRepository.save(metadata).getId();
+
+        List<String> partUrls = new java.util.ArrayList<>();
+        for (int part = 1; part <= request.partCount(); part++) {
+            UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
+                    .bucket(bucketName)
+                    .key(s3ObjectKey)
+                    .uploadId(uploadId)
+                    .partNumber(part)
+                    .build();
+            UploadPartPresignRequest presignRequest = UploadPartPresignRequest.builder()
+                    .signatureDuration(Duration.ofHours(1))
+                    .uploadPartRequest(uploadPartRequest)
+                    .build();
+            partUrls.add(s3Presigner.presignUploadPart(presignRequest).url().toExternalForm());
+        }
+
+        log.info("Initiated multipart upload for file '{}', uploadId={}, parts={}", request.fileName(), uploadId, request.partCount());
+        return new MultipartInitiateResponse(fileId, uploadId, partUrls);
+    }
+
+    @Transactional
+    public FileMetadataResponse completeMultipartUpload(Long fileId, MultipartCompleteRequest request) {
+        FileMetadata metadata = getPendingFileMetadata(fileId);
+
+        List<CompletedPart> completedParts = request.parts().stream()
+                .map(p -> CompletedPart.builder()
+                        .partNumber(p.partNumber())
+                        .eTag(p.eTag())
+                        .build())
+                .toList();
+
+        CompleteMultipartUploadRequest completeRequest = CompleteMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(metadata.getS3ObjectKey())
+                .uploadId(metadata.getUploadId())
+                .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+                .build();
+
+        try {
+            s3Client.completeMultipartUpload(completeRequest);
+        } catch (S3Exception e) {
+            log.error("Failed to complete multipart upload for file ID {}: {}", fileId, e.getMessage(), e);
+            throw new RuntimeException("Failed to complete multipart upload: " + e.getMessage(), e);
+        }
+
+        metadata.setUploadStatus(UploadStatus.COMPLETE);
+        log.info("Completed multipart upload for file ID {}", fileId);
+        return mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
+    }
+
+    @Transactional
+    public void abortMultipartUpload(Long fileId) {
+        FileMetadata metadata = getPendingFileMetadata(fileId);
+
+        AbortMultipartUploadRequest abortRequest = AbortMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(metadata.getS3ObjectKey())
+                .uploadId(metadata.getUploadId())
+                .build();
+
+        try {
+            s3Client.abortMultipartUpload(abortRequest);
+        } catch (S3Exception e) {
+            log.warn("S3 abort failed for file ID {} (removing metadata anyway): {}", fileId, e.getMessage());
+        }
+
+        fileMetadataRepository.deleteById(fileId);
+        log.info("Aborted multipart upload for file ID {}", fileId);
+    }
+
+    private FileMetadata getPendingFileMetadata(Long fileId) {
+        FileMetadata metadata = fileMetadataRepository.findById(fileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Upload not found with ID: " + fileId));
+
+        if (metadata.getUploadStatus() != UploadStatus.PENDING) {
+            throw new ResourceNotFoundException("Upload not found with ID: " + fileId);
+        }
+
+        User currentUser = getAuthenticatedUser();
+        boolean isAdmin = isCurrentUserAdmin();
+        if (!metadata.getOwner().getId().equals(currentUser.getId()) && !isAdmin) {
+            log.warn("User {} attempted unauthorized access to upload ID {}", currentUser.getUsername(), fileId);
+            throw new AccessDeniedException("You do not have permission to access this upload.");
+        }
+
+        return metadata;
     }
 
     private FileMetadataResponse mapToFileMetadataResponse(FileMetadata fileMetadata) {
