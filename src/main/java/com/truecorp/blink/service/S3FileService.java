@@ -219,36 +219,47 @@ public class S3FileService {
                 .contentType(request.contentType())
                 .build();
 
-        String uploadId = s3Client.createMultipartUpload(createRequest).uploadId();
+        try {
+            String uploadId = s3Client.createMultipartUpload(createRequest).uploadId();
 
-        FileMetadata metadata = new FileMetadata();
-        metadata.setOriginalFileName(request.fileName());
-        metadata.setS3ObjectKey(s3ObjectKey);
-        metadata.setContentType(request.contentType());
-        metadata.setFileSize(request.fileSize());
-        metadata.setUploadTimestamp(Instant.now());
-        metadata.setOwner(currentUser);
-        metadata.setUploadStatus(UploadStatus.PENDING);
-        metadata.setUploadId(uploadId);
-        Long fileId = fileMetadataRepository.save(metadata).getId();
+            FileMetadata metadata = new FileMetadata();
+            metadata.setOriginalFileName(request.fileName());
+            metadata.setS3ObjectKey(s3ObjectKey);
+            metadata.setContentType(request.contentType());
+            metadata.setFileSize(request.fileSize());
+            metadata.setUploadTimestamp(Instant.now());
+            metadata.setOwner(currentUser);
+            metadata.setUploadStatus(UploadStatus.PENDING);
+            metadata.setUploadId(uploadId);
+            Long fileId = fileMetadataRepository.save(metadata).getId();
 
-        List<String> partUrls = new java.util.ArrayList<>();
-        for (int part = 1; part <= request.partCount(); part++) {
-            UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
-                    .bucket(bucketName)
-                    .key(s3ObjectKey)
-                    .uploadId(uploadId)
-                    .partNumber(part)
-                    .build();
-            UploadPartPresignRequest presignRequest = UploadPartPresignRequest.builder()
-                    .signatureDuration(Duration.ofHours(1))
-                    .uploadPartRequest(uploadPartRequest)
-                    .build();
-            partUrls.add(s3Presigner.presignUploadPart(presignRequest).url().toExternalForm());
+            List<String> partUrls = new java.util.ArrayList<>();
+            for (int part = 1; part <= request.partCount(); part++) {
+                UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
+                        .bucket(bucketName)
+                        .key(s3ObjectKey)
+                        .uploadId(uploadId)
+                        .partNumber(part)
+                        .build();
+                UploadPartPresignRequest presignRequest = UploadPartPresignRequest.builder()
+                        .signatureDuration(Duration.ofHours(1))
+                        .uploadPartRequest(uploadPartRequest)
+                        .build();
+                partUrls.add(s3Presigner.presignUploadPart(presignRequest).url().toExternalForm());
+            }
+
+            log.info("Initiated multipart upload for file '{}', uploadId={}, parts={}",
+                    request.fileName(), uploadId, request.partCount());
+            return new MultipartInitiateResponse(fileId, uploadId, partUrls);
+        } catch (S3Exception e) {
+            log.error("S3 multipart upload initiation failed for file '{}': {}",
+                    request.fileName(), e.getMessage(), e);
+            throw new RuntimeException("Failed to initiate multipart upload: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error initiating multipart upload for file '{}': {}",
+                    request.fileName(), e.getMessage(), e);
+            throw new RuntimeException("Failed to initiate multipart upload: " + e.getMessage(), e);
         }
-
-        log.info("Initiated multipart upload for file '{}', uploadId={}, parts={}", request.fileName(), uploadId, request.partCount());
-        return new MultipartInitiateResponse(fileId, uploadId, partUrls);
     }
 
     @Transactional
@@ -271,14 +282,17 @@ public class S3FileService {
 
         try {
             s3Client.completeMultipartUpload(completeRequest);
+            metadata.setUploadStatus(UploadStatus.COMPLETE);
+            FileMetadataResponse response = mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
+            log.info("Completed multipart upload for file ID {}", fileId);
+            return response;
         } catch (S3Exception e) {
             log.error("Failed to complete multipart upload for file ID {}: {}", fileId, e.getMessage(), e);
             throw new RuntimeException("Failed to complete multipart upload: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error completing multipart upload for file ID {}: {}", fileId, e.getMessage(), e);
+            throw new RuntimeException("Failed to complete multipart upload: " + e.getMessage(), e);
         }
-
-        metadata.setUploadStatus(UploadStatus.COMPLETE);
-        log.info("Completed multipart upload for file ID {}", fileId);
-        return mapToFileMetadataResponse(fileMetadataRepository.save(metadata));
     }
 
     @Transactional
@@ -293,12 +307,15 @@ public class S3FileService {
 
         try {
             s3Client.abortMultipartUpload(abortRequest);
+            fileMetadataRepository.deleteById(fileId);
+            log.info("Aborted multipart upload for file ID {}", fileId);
         } catch (S3Exception e) {
-            log.warn("S3 abort failed for file ID {} (removing metadata anyway): {}", fileId, e.getMessage());
+            log.error("S3 abort failed for file ID {}: {}", fileId, e.getMessage(), e);
+            throw new RuntimeException("Failed to abort multipart upload: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error aborting multipart upload for file ID {}: {}", fileId, e.getMessage(), e);
+            throw new RuntimeException("Failed to abort multipart upload: " + e.getMessage(), e);
         }
-
-        fileMetadataRepository.deleteById(fileId);
-        log.info("Aborted multipart upload for file ID {}", fileId);
     }
 
     private FileMetadata getPendingFileMetadata(Long fileId) {

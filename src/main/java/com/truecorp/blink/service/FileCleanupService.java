@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -72,5 +73,46 @@ public class FileCleanupService {
         }
 
         log.info("Cleanup finished. Successfully deleted: {}, Failed: {}", deletedCount, failedCount);
+    }
+
+    @Scheduled(cron = "0 0 * * * *")
+    public void purgeStalePendingUploads() {
+        log.info("Starting scheduled cleanup of stale pending uploads...");
+
+        Instant cutoffTime = Instant.now().minus(Duration.ofHours(48));
+        List<FileMetadata> staleUploads = fileMetadataRepository.findByUploadStatusAndUploadTimestampBefore(
+                UploadStatus.PENDING, cutoffTime);
+
+        if (staleUploads.isEmpty()) {
+            log.info("No stale pending uploads found for cleanup.");
+            return;
+        }
+
+        int abortedCount = 0;
+        int failedCount = 0;
+
+        for (FileMetadata metadata : staleUploads) {
+            try {
+                AbortMultipartUploadRequest abortRequest = AbortMultipartUploadRequest.builder()
+                        .bucket(bucketName)
+                        .key(metadata.getS3ObjectKey())
+                        .uploadId(metadata.getUploadId())
+                        .build();
+                s3Client.abortMultipartUpload(abortRequest);
+                fileMetadataRepository.delete(metadata);
+                log.debug("Removed stale pending upload: fileId={}, uploadId={}", metadata.getId(), metadata.getUploadId());
+                abortedCount++;
+            } catch (S3Exception e) {
+                log.error("Failed to abort multipart upload in S3 for file ID {}. Database record retained for retry: {}",
+                        metadata.getId(), e.getMessage());
+                failedCount++;
+            } catch (Exception e) {
+                log.error("Unexpected error aborting multipart upload for file ID {}. Database record retained for retry: {}",
+                        metadata.getId(), e.getMessage());
+                failedCount++;
+            }
+        }
+
+        log.info("Stale upload cleanup finished. Aborted: {}, Failed (will retry next run): {}", abortedCount, failedCount);
     }
 }
