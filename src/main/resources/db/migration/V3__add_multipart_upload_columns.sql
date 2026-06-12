@@ -1,0 +1,3 @@
+ALTER TABLE file_metadata
+    ADD COLUMN upload_status VARCHAR(255) NOT NULL DEFAULT 'COMPLETE',
+    ADD COLUMN upload_id VARCHAR(255);
