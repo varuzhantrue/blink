@@ -1,8 +1,12 @@
 package com.truecorp.blink.service;
 
 import com.truecorp.blink.dto.FileMetadataResponse;
+import com.truecorp.blink.dto.MultipartCompleteRequest;
+import com.truecorp.blink.dto.MultipartInitiateRequest;
+import com.truecorp.blink.dto.MultipartInitiateResponse;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
+import com.truecorp.blink.model.UploadStatus;
 import com.truecorp.blink.model.User;
 import com.truecorp.blink.repository.FileMetadataRepository;
 import com.truecorp.blink.repository.UserRepository;
@@ -25,6 +29,8 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedUploadPartRequest;
+import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
 
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -267,14 +273,15 @@ public class S3FileServiceTest {
     @Test
     void listFiles_ShouldReturnOwnFilesForRegularUser() {
         mockAuthentication("testUser");
-        when(fileMetadataRepository.findByOwner(sampleUser)).thenReturn(List.of(sampleMetadata));
+        when(fileMetadataRepository.findByOwnerAndUploadStatus(sampleUser, UploadStatus.COMPLETE))
+                .thenReturn(List.of(sampleMetadata));
 
         List<FileMetadataResponse> result = s3FileService.listFiles(false);
 
         assertEquals(1, result.size());
         assertEquals("test.txt", result.getFirst().originalFileName());
-        verify(fileMetadataRepository).findByOwner(sampleUser);
-        verify(fileMetadataRepository, never()).findAll();
+        verify(fileMetadataRepository).findByOwnerAndUploadStatus(sampleUser, UploadStatus.COMPLETE);
+        verify(fileMetadataRepository, never()).findByUploadStatus(any());
     }
 
     @Test
@@ -289,13 +296,14 @@ public class S3FileServiceTest {
         otherFile.setContentType("text/plain");
         otherFile.setOwner(sampleUser);
 
-        when(fileMetadataRepository.findAll()).thenReturn(List.of(sampleMetadata, otherFile));
+        when(fileMetadataRepository.findByUploadStatus(UploadStatus.COMPLETE))
+                .thenReturn(List.of(sampleMetadata, otherFile));
 
         List<FileMetadataResponse> result = s3FileService.listFiles(true);
 
         assertEquals(2, result.size());
-        verify(fileMetadataRepository).findAll();
-        verify(fileMetadataRepository, never()).findByOwner(any());
+        verify(fileMetadataRepository).findByUploadStatus(UploadStatus.COMPLETE);
+        verify(fileMetadataRepository, never()).findByOwnerAndUploadStatus(any(), any());
     }
 
     @Test
@@ -303,8 +311,8 @@ public class S3FileServiceTest {
         mockAuthentication("testUser");
 
         assertThrows(AccessDeniedException.class, () -> s3FileService.listFiles(true));
-        verify(fileMetadataRepository, never()).findAll();
-        verify(fileMetadataRepository, never()).findByOwner(any());
+        verify(fileMetadataRepository, never()).findByUploadStatus(any());
+        verify(fileMetadataRepository, never()).findByOwnerAndUploadStatus(any(), any());
     }
 
     @Test
@@ -325,5 +333,170 @@ public class S3FileServiceTest {
         assertEquals(mockUrl.toString(), resultURL);
         verify(fileMetadataRepository).findById(1L);
         verify(s3Presigner).presignGetObject(any(GetObjectPresignRequest.class));
+    }
+
+    private FileMetadata pendingMetadata() {
+        FileMetadata metadata = new FileMetadata();
+        metadata.setId(2L);
+        metadata.setOriginalFileName("big.zip");
+        metadata.setS3ObjectKey("uploads/1/uuid-big.zip");
+        metadata.setFileSize(1000L);
+        metadata.setContentType("application/zip");
+        metadata.setOwner(sampleUser);
+        metadata.setUploadStatus(UploadStatus.PENDING);
+        metadata.setUploadId("upload-id-123");
+        return metadata;
+    }
+
+    @Test
+    void initiateMultipartUpload_ShouldReturnPresignedUrlsAndSavePendingMetadata() throws MalformedURLException {
+        mockAuthentication("testUser");
+
+        MultipartInitiateRequest request = new MultipartInitiateRequest(
+                "big.zip",
+                "application/zip",
+                1000L,
+                2
+        );
+
+        when(s3Client.createMultipartUpload(any(CreateMultipartUploadRequest.class)))
+                .thenReturn(CreateMultipartUploadResponse.builder().uploadId("upload-id-123").build());
+        when(fileMetadataRepository.save(any(FileMetadata.class)))
+                .thenAnswer(i -> {
+                    FileMetadata m = i.getArgument(0);
+                    m.setId(2L);
+                    return m;
+                });
+
+        PresignedUploadPartRequest presignedPart = mock(PresignedUploadPartRequest.class);
+        URL mockUrl = URI.create("https://example.com/presigned-part").toURL();
+        when(presignedPart.url()).thenReturn(mockUrl);
+        when(s3Presigner.presignUploadPart(any(UploadPartPresignRequest.class))).thenReturn(presignedPart);
+
+        MultipartInitiateResponse result = s3FileService.initiateMultipartUpload(request);
+
+        assertEquals(2L, result.fileId());
+        assertEquals("upload-id-123", result.uploadId());
+        assertEquals(2, result.partUrls().size());
+        assertEquals(mockUrl.toString(), result.partUrls().getFirst());
+        verify(fileMetadataRepository).save(argThat(m ->
+                m.getUploadStatus() == UploadStatus.PENDING && "upload-id-123".equals(m.getUploadId())));
+        verify(s3Presigner, times(2)).presignUploadPart(any(UploadPartPresignRequest.class));
+    }
+
+    @Test
+    void initiateMultipartUpload_ShouldThrowRuntimeException_WhenS3Fails() {
+        mockAuthentication("testUser");
+
+        MultipartInitiateRequest request = new MultipartInitiateRequest(
+                "big.zip",
+                "application/zip",
+                1000L,
+                1
+        );
+
+        when(s3Client.createMultipartUpload(any(CreateMultipartUploadRequest.class)))
+                .thenThrow(S3Exception.builder().message("Access Denied").build());
+
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> s3FileService.initiateMultipartUpload(request));
+
+        assertTrue(exception.getMessage().contains("Failed to initiate multipart upload"));
+        verify(fileMetadataRepository, never()).save(any(FileMetadata.class));
+    }
+
+    @Test
+    void completeMultipartUpload_ShouldMarkMetadataComplete() {
+        mockAuthentication("testUser");
+        FileMetadata pending = pendingMetadata();
+        when(fileMetadataRepository.findById(2L)).thenReturn(Optional.of(pending));
+        when(fileMetadataRepository.save(any(FileMetadata.class))).thenAnswer(i -> i.getArgument(0));
+        when(s3Client.completeMultipartUpload(any(CompleteMultipartUploadRequest.class)))
+                .thenReturn(CompleteMultipartUploadResponse.builder().build());
+
+        MultipartCompleteRequest request = new MultipartCompleteRequest(
+                List.of(new MultipartCompleteRequest.Part(1, "etag-1")));
+
+        FileMetadataResponse result = s3FileService.completeMultipartUpload(2L, request);
+
+        assertEquals("big.zip", result.originalFileName());
+        verify(fileMetadataRepository).save(argThat(m -> m.getUploadStatus() == UploadStatus.COMPLETE));
+    }
+
+    @Test
+    void completeMultipartUpload_ShouldThrowResourceNotFound_WhenUploadNotPending() {
+        when(fileMetadataRepository.findById(1L)).thenReturn(Optional.of(sampleMetadata));
+
+        MultipartCompleteRequest request = new MultipartCompleteRequest(
+                List.of(new MultipartCompleteRequest.Part(1, "etag-1")));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> s3FileService.completeMultipartUpload(1L, request));
+        verify(s3Client, never()).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
+    }
+
+    @Test
+    void completeMultipartUpload_ShouldThrowAccessDenied_WhenUserIsNotOwner() {
+        mockAuthentication("otherUser");
+        User otherUser = new User();
+        otherUser.setId(2L);
+        otherUser.setRoles(Collections.emptySet());
+        when(userRepository.findByUsername("otherUser")).thenReturn(Optional.of(otherUser));
+        when(fileMetadataRepository.findById(2L)).thenReturn(Optional.of(pendingMetadata()));
+
+        MultipartCompleteRequest request = new MultipartCompleteRequest(
+                List.of(new MultipartCompleteRequest.Part(1, "etag-1")));
+
+        assertThrows(AccessDeniedException.class, () -> s3FileService.completeMultipartUpload(2L, request));
+    }
+
+    @Test
+    void completeMultipartUpload_ShouldThrowRuntimeException_WhenS3Fails() {
+        mockAuthentication("testUser");
+        when(fileMetadataRepository.findById(2L)).thenReturn(Optional.of(pendingMetadata()));
+        when(s3Client.completeMultipartUpload(any(CompleteMultipartUploadRequest.class)))
+                .thenThrow(S3Exception.builder().message("Invalid part").build());
+
+        MultipartCompleteRequest request = new MultipartCompleteRequest(
+                List.of(new MultipartCompleteRequest.Part(1, "etag-1")));
+
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> s3FileService.completeMultipartUpload(2L, request));
+
+        assertTrue(exception.getMessage().contains("Failed to complete multipart upload"));
+        verify(fileMetadataRepository, never()).save(any(FileMetadata.class));
+    }
+
+    @Test
+    void abortMultipartUpload_ShouldDeletePendingMetadataAndAbortS3Upload() {
+        mockAuthentication("testUser");
+        when(fileMetadataRepository.findById(2L)).thenReturn(Optional.of(pendingMetadata()));
+
+        s3FileService.abortMultipartUpload(2L);
+
+        verify(s3Client).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+        verify(fileMetadataRepository).deleteById(2L);
+    }
+
+    @Test
+    void abortMultipartUpload_ShouldThrowResourceNotFound_WhenUploadNotPending() {
+        when(fileMetadataRepository.findById(1L)).thenReturn(Optional.of(sampleMetadata));
+
+        assertThrows(ResourceNotFoundException.class, () -> s3FileService.abortMultipartUpload(1L));
+        verify(s3Client, never()).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
+    }
+
+    @Test
+    void abortMultipartUpload_ShouldThrowRuntimeException_WhenS3Fails() {
+        mockAuthentication("testUser");
+        when(fileMetadataRepository.findById(2L)).thenReturn(Optional.of(pendingMetadata()));
+        when(s3Client.abortMultipartUpload(any(AbortMultipartUploadRequest.class)))
+                .thenThrow(S3Exception.builder().message("Access Denied").build());
+
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> s3FileService.abortMultipartUpload(2L));
+
+        assertTrue(exception.getMessage().contains("Failed to abort multipart upload"));
+        verify(fileMetadataRepository, never()).deleteById(anyLong());
     }
 }

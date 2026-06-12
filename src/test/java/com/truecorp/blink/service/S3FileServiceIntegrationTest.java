@@ -1,6 +1,10 @@
 package com.truecorp.blink.service;
 
 import com.truecorp.blink.dto.FileMetadataResponse;
+import com.truecorp.blink.dto.MultipartCompleteRequest;
+import com.truecorp.blink.dto.MultipartInitiateRequest;
+import com.truecorp.blink.dto.MultipartInitiateResponse;
+import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.User;
 import com.truecorp.blink.repository.FileMetadataRepository;
 import com.truecorp.blink.repository.UserRepository;
@@ -21,9 +25,14 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -159,5 +168,79 @@ public class S3FileServiceIntegrationTest {
     void listFiles_ShouldThrowAccessDenied_WhenNonAdminRequestsAll() {
         assertThrows(AccessDeniedException.class,
                 () -> s3FileService.listFiles(true));
+    }
+
+    @Test
+    @WithMockUser(username = TEST_USERNAME)
+    void testFullMultipartUploadFlow() throws Exception {
+        // S3/MinIO require non-final multipart parts to be at least 5 MB
+        byte[] partOneData = "first part of the file - ".repeat(250_000).getBytes();
+        byte[] partTwoData = "second and final part".getBytes();
+
+        MultipartInitiateRequest initiateRequest = new MultipartInitiateRequest(
+                "multipart-test.bin",
+                "application/octet-stream",
+                (long) (partOneData.length + partTwoData.length),
+                2
+        );
+
+        MultipartInitiateResponse initiateResponse = s3FileService.initiateMultipartUpload(initiateRequest);
+
+        assertNotNull(initiateResponse.fileId());
+        assertNotNull(initiateResponse.uploadId());
+        assertEquals(2, initiateResponse.partUrls().size());
+
+        HttpClient httpClient = HttpClient.newHttpClient();
+        String eTag1 = uploadPart(httpClient, initiateResponse.partUrls().get(0), partOneData);
+        String eTag2 = uploadPart(httpClient, initiateResponse.partUrls().get(1), partTwoData);
+
+        MultipartCompleteRequest completeRequest = new MultipartCompleteRequest(List.of(
+                new MultipartCompleteRequest.Part(1, eTag1),
+                new MultipartCompleteRequest.Part(2, eTag2)
+        ));
+
+        FileMetadataResponse completedFile = s3FileService.completeMultipartUpload(initiateResponse.fileId(),
+                completeRequest);
+
+        assertEquals("multipart-test.bin", completedFile.originalFileName());
+
+        try (InputStream is = s3FileService.downloadFile(initiateResponse.fileId())) {
+            byte[] downloaded = is.readAllBytes();
+            byte[] expected = new byte[partOneData.length + partTwoData.length];
+            System.arraycopy(partOneData, 0, expected, 0, partOneData.length);
+            System.arraycopy(partTwoData, 0, expected, partOneData.length, partTwoData.length);
+            assertArrayEquals(expected, downloaded);
+        }
+    }
+
+    @Test
+    @WithMockUser(username = TEST_USERNAME)
+    void testMultipartUploadAbortFlow() {
+        MultipartInitiateRequest initiateRequest = new MultipartInitiateRequest(
+                "aborted-upload.bin",
+                "application/octet-stream",
+                100L,
+                1
+        );
+
+        MultipartInitiateResponse initiateResponse = s3FileService.initiateMultipartUpload(initiateRequest);
+
+        s3FileService.abortMultipartUpload(initiateResponse.fileId());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> s3FileService.downloadFile(initiateResponse.fileId()));
+    }
+
+    private String uploadPart(HttpClient httpClient, String presignedUrl, byte[] data) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(presignedUrl))
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(data))
+                .build();
+
+        HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+        assertEquals(200, response.statusCode());
+
+        return response.headers().firstValue("ETag")
+                .orElseThrow(() -> new IllegalStateException("No ETag returned for uploaded part"));
     }
 }
