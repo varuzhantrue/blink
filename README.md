@@ -40,6 +40,10 @@ for transient sharing, not long-term storage.
   exposing internal credentials.
 - **Automatic Expiry** - Files are purged hourly once they exceed the retention period (`blink.retention-period-hours`,
   default 24 h). Blink is intended for temporary sharing, not permanent storage.
+- **Multipart Upload** - Large files can be uploaded directly to MinIO via presigned per-part URLs
+  (`/api/files/multipart/initiate` → client PUTs each part → `/api/files/multipart/{fileId}/complete`), avoiding
+  server bandwidth/memory pressure. Abandoned (`PENDING`) uploads older than `blink.stale-upload-period-hours`
+  (default 48 h) are aborted and cleaned up hourly alongside expired files.
 - **Per-User Rate Limiting** - Upload and download endpoints are protected by a Redis-backed sliding-window rate
   limiter.
   Limits are configurable via `blink.rate-limit.upload` and `blink.rate-limit.download` (default: 10 uploads / 60 s,
@@ -62,16 +66,19 @@ for transient sharing, not long-term storage.
 
 All file operations require a valid JWT provided in the `Authorization: Bearer <token>` header.
 
-| Method   | Endpoint                   | Description                                                                                    | Access        |
-|:---------|:---------------------------|:-----------------------------------------------------------------------------------------------|:--------------|
-| `POST`   | `/api/auth/signup`         | Register a new user account. Returns a JWT on success, auto-logging the user in.               | Public        |
-| `POST`   | `/api/auth/login`          | Authenticate user credentials and receive a JWT.                                               | Public        |
-| `GET`    | `/api/files`               | List files. Admins may pass `?all=true` to list every user's files.                            | Authenticated |
-| `POST`   | `/api/files/upload`        | Upload a file (`multipart/form-data`) to the storage bucket.                                   | Authenticated |
-| `GET`    | `/api/files/{id}`          | Retrieve file metadata (original name, size, upload timestamp).                                | Authenticated |
-| `GET`    | `/api/files/{id}/download` | Stream the file content directly for download.                                                 | Authenticated |
-| `GET`    | `/api/files/{id}/share`    | Generate a 1-hour presigned URL for temporary external access. File itself expires after 24 h. | Authenticated |
-| `DELETE` | `/api/files/{id}`          | Remove the file from MinIO and delete its metadata from PostgreSQL.                            | Admin Only    |
+| Method   | Endpoint                                 | Description                                                                                    | Access         |
+|:---------|:-----------------------------------------|:-----------------------------------------------------------------------------------------------|:---------------|
+| `POST`   | `/api/auth/signup`                       | Register a new user account. Returns a JWT on success, auto-logging the user in.               | Public         |
+| `POST`   | `/api/auth/login`                        | Authenticate user credentials and receive a JWT.                                               | Public         |
+| `GET`    | `/api/files`                             | List files. Admins may pass `?all=true` to list every user's files.                            | Authenticated  |
+| `POST`   | `/api/files/upload`                      | Upload a file (`multipart/form-data`) to the storage bucket.                                   | Authenticated  |
+| `GET`    | `/api/files/{id}`                        | Retrieve file metadata (original name, size, upload timestamp).                                | Authenticated  |
+| `GET`    | `/api/files/{id}/download`               | Stream the file content directly for download.                                                 | Authenticated  |
+| `GET`    | `/api/files/{id}/share`                  | Generate a 1-hour presigned URL for temporary external access. File itself expires after 24 h. | Authenticated  |
+| `DELETE` | `/api/files/{id}`                        | Remove the file from MinIO and delete its metadata from PostgreSQL.                            | Owner or Admin |
+| `POST`   | `/api/files/multipart/initiate`          | Start a multipart upload session and receive presigned part URLs.                              | Authenticated  |
+| `POST`   | `/api/files/multipart/{fileId}/complete` | Complete a multipart upload once all parts have been uploaded.                                 | Owner Only     |
+| `DELETE` | `/api/files/multipart/{fileId}/abort`    | Abort an in-progress multipart upload and clean up its parts.                                  | Owner Only     |
 
 ---
 
