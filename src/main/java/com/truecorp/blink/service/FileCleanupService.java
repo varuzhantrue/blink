@@ -26,6 +26,9 @@ public class FileCleanupService {
     @Value("${blink.retention-period-hours:24}")
     private long retentionPeriodHours;
 
+    @Value("${blink.stale-upload-period-hours:48}")
+    private long staleUploadPeriodHours;
+
     public FileCleanupService(FileMetadataRepository fileMetadataRepository,
                               S3Client s3Client,
                               @Value("${minio.bucket-name}") String bucketName) {
@@ -79,7 +82,7 @@ public class FileCleanupService {
     public void purgeStalePendingUploads() {
         log.info("Starting scheduled cleanup of stale pending uploads...");
 
-        Instant cutoffTime = Instant.now().minus(Duration.ofHours(48));
+        Instant cutoffTime = Instant.now().minus(Duration.ofHours(staleUploadPeriodHours));
         List<FileMetadata> staleUploads = fileMetadataRepository.findByUploadStatusAndUploadTimestampBefore(
                 UploadStatus.PENDING, cutoffTime);
 

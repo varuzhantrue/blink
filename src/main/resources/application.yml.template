@@ -58,6 +58,7 @@ management:
 
 blink:
   retention-period-hours: 24
+  stale-upload-period-hours: 48
   rate-limit:
     upload:
       requests: 10
