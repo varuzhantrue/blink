@@ -36,4 +36,10 @@ public class FileMetadata {
     private User owner;
 
     private String shareToken;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UploadStatus uploadStatus = UploadStatus.COMPLETE;
+
+    private String uploadId;
 }

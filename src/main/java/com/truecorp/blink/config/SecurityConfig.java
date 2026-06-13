@@ -35,7 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/files/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/files/**").authenticated()
-                        .requestMatchers(HttpMethod.DELETE, "/api/files/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/files/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
