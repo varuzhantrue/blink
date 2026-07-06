@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -80,6 +81,21 @@ public class GlobalExceptionHandler {
                 "Conflict",
                 ex.getMessage());
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Handles AuthenticationException (e.g. BadCredentialsException, InternalAuthenticationServiceException)
+     * thrown by AuthenticationManager during login and returns a 401 UNAUTHORIZED.
+     * Always returns a generic message to avoid leaking whether the username exists.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    @ResponseBody
+    public ResponseEntity<Object> handleAuthenticationException(AuthenticationException ex) {
+        Map<String, Object> body = createErrorBody(
+                HttpStatus.UNAUTHORIZED,
+                "Unauthorized",
+                "Invalid credentials");
+        return new ResponseEntity<>(body, HttpStatus.UNAUTHORIZED);
     }
 
     /**
