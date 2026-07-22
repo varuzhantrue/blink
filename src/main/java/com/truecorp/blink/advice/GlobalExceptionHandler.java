@@ -1,5 +1,6 @@
 package com.truecorp.blink.advice;
 
+import com.truecorp.blink.exception.InvalidUploadRequestException;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.exception.UsernameAlreadyExistsException;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +82,19 @@ public class GlobalExceptionHandler {
                 "Conflict",
                 ex.getMessage());
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
+    /**
+     * Handles InvalidUploadRequestException thrown when a multipart upload request exceeds
+     * the configured file size or part count limits, and returns a 400 BAD REQUEST.
+     */
+    @ExceptionHandler(InvalidUploadRequestException.class)
+    @ResponseBody
+    public ResponseEntity<Object> handleInvalidUploadRequestException(InvalidUploadRequestException ex) {
+        log.warn("Invalid upload request: {}", ex.getMessage());
+
+        Map<String, Object> body = createErrorBody(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     /**

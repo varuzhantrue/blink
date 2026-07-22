@@ -4,6 +4,7 @@ import com.truecorp.blink.dto.FileMetadataResponse;
 import com.truecorp.blink.dto.MultipartCompleteRequest;
 import com.truecorp.blink.dto.MultipartInitiateRequest;
 import com.truecorp.blink.dto.MultipartInitiateResponse;
+import com.truecorp.blink.exception.InvalidUploadRequestException;
 import com.truecorp.blink.exception.ResourceNotFoundException;
 import com.truecorp.blink.model.FileMetadata;
 import com.truecorp.blink.model.UploadStatus;
@@ -47,6 +48,12 @@ public class S3FileService {
     private final Counter downloadCounter;
     private final Counter deleteCounter;
     private final String bucketName;
+    private final long maxFileSizeBytes;
+    private final int maxPartCount;
+    /** S3/MinIO requires every part except the last to be at least 5 MiB. */
+    private static final long MIN_PART_SIZE_BYTES = 5L * 1024 * 1024;
+    /** S3/MinIO caps every individual part at 5 GiB. */
+    private static final long MAX_PART_SIZE_BYTES = 5L * 1024 * 1024 * 1024;
 
     public S3FileService(
             S3Client s3Client,
@@ -54,13 +61,17 @@ public class S3FileService {
             FileMetadataRepository fileMetadataRepository,
             UserRepository userRepository,
             MeterRegistry meterRegistry,
-            @Value("${minio.bucket-name}") String bucketName
+            @Value("${minio.bucket-name}") String bucketName,
+            @Value("${blink.multipart.max-file-size-bytes}") long maxFileSizeBytes,
+            @Value("${blink.multipart.max-part-count}") int maxPartCount
     ) {
         this.s3Client = s3Client;
         this.s3Presigner = s3Presigner;
         this.fileMetadataRepository = fileMetadataRepository;
         this.userRepository = userRepository;
         this.bucketName = bucketName;
+        this.maxFileSizeBytes = maxFileSizeBytes;
+        this.maxPartCount = maxPartCount;
         this.uploadTimer = Timer.builder("blink.files.upload.duration")
                 .description("Time taken to upload a file to MinIO")
                 .register(meterRegistry);
@@ -206,6 +217,8 @@ public class S3FileService {
 
     @Transactional
     public MultipartInitiateResponse initiateMultipartUpload(MultipartInitiateRequest request) {
+        validateMultipartUploadRequest(request);
+
         User currentUser = getAuthenticatedUser();
 
         String s3ObjectKey = String.format("uploads/%d/%s-%s",
@@ -259,6 +272,30 @@ public class S3FileService {
             log.error("Unexpected error initiating multipart upload for file '{}': {}",
                     request.fileName(), e.getMessage(), e);
             throw new RuntimeException("Failed to initiate multipart upload: " + e.getMessage(), e);
+        }
+    }
+
+    private void validateMultipartUploadRequest(MultipartInitiateRequest request) {
+        if (request.fileSize() > maxFileSizeBytes) {
+            throw new InvalidUploadRequestException(
+                    "File size %d bytes exceeds the maximum allowed size of %d bytes"
+                            .formatted(request.fileSize(), maxFileSizeBytes));
+        }
+        if (request.partCount() > maxPartCount) {
+            throw new InvalidUploadRequestException(
+                    "Part count %d exceeds the maximum allowed part count of %d"
+                            .formatted(request.partCount(), maxPartCount));
+        }
+        if (request.partCount() > 1 && request.fileSize() / request.partCount() < MIN_PART_SIZE_BYTES) {
+            throw new InvalidUploadRequestException(
+                    "Average part size is below the minimum of %d bytes required by S3 for non-final parts"
+                            .formatted(MIN_PART_SIZE_BYTES));
+        }
+        long maxIndividualPartSize = (request.fileSize() + request.partCount() - 1) / request.partCount();
+        if (maxIndividualPartSize > MAX_PART_SIZE_BYTES) {
+            throw new InvalidUploadRequestException(
+                    "Requested part size of %d bytes exceeds the maximum of %d bytes allowed by S3 per part"
+                            .formatted(maxIndividualPartSize, MAX_PART_SIZE_BYTES));
         }
     }
 
