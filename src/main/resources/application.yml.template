@@ -59,6 +59,9 @@ management:
 blink:
   retention-period-hours: 24
   stale-upload-period-hours: 48
+  multipart:
+    max-file-size-bytes: 21474836480 # 20 GiB
+    max-part-count: 10000 # S3/MinIO hard limit on number of parts per upload
   rate-limit:
     upload:
       requests: 10

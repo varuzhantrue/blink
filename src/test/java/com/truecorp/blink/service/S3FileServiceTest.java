@@ -79,7 +79,9 @@ public class S3FileServiceTest {
                 fileMetadataRepository,
                 userRepository,
                 new SimpleMeterRegistry(),
-                "test-bucket"
+                "test-bucket",
+                20L * 1024 * 1024 * 1024,
+                10000
         );
 
         sampleUser = new User();
@@ -355,7 +357,7 @@ public class S3FileServiceTest {
         MultipartInitiateRequest request = new MultipartInitiateRequest(
                 "big.zip",
                 "application/zip",
-                1000L,
+                20L * 1024 * 1024,
                 2
         );
 
