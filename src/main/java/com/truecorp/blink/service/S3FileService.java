@@ -286,10 +286,14 @@ public class S3FileService {
                     "Part count %d exceeds the maximum allowed part count of %d"
                             .formatted(request.partCount(), maxPartCount));
         }
-        if (request.partCount() > 1 && request.fileSize() / request.partCount() < MIN_PART_SIZE_BYTES) {
+        // Only non-final parts must meet MIN_PART_SIZE_BYTES, so fileSize just needs to cover that minimum for
+        // all but the last part.
+        long minRequiredFileSize = MIN_PART_SIZE_BYTES * (request.partCount() - 1);
+        if (request.fileSize() < minRequiredFileSize) {
             throw new InvalidUploadRequestException(
-                    "Average part size is below the minimum of %d bytes required by S3 for non-final parts"
-                            .formatted(MIN_PART_SIZE_BYTES));
+                    ("File size %d bytes is too small to be split into %d parts with a " +
+                            "minimum non-final part size of %d bytes")
+                            .formatted(request.fileSize(), request.partCount(), MIN_PART_SIZE_BYTES));
         }
         long maxIndividualPartSize = (request.fileSize() + request.partCount() - 1) / request.partCount();
         if (maxIndividualPartSize > MAX_PART_SIZE_BYTES) {
