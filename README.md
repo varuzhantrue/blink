@@ -40,13 +40,15 @@ for transient sharing, not long-term storage.
   exposing internal credentials.
 - **Automatic Expiry** - Files are purged hourly once they exceed the retention period (`blink.retention-period-hours`,
   default 24 h). Blink is intended for temporary sharing, not permanent storage.
+- **Upload Size Limit** - Direct uploads via `/api/files/upload` are capped at 100 MB (Spring's
+  `spring.servlet.multipart.max-file-size`/`max-request-size`); larger files must use the multipart upload flow below.
 - **Multipart Upload** - Large files can be uploaded directly to MinIO via presigned per-part URLs
-  (`/api/files/multipart/initiate` → client PUTs each part → `/api/files/multipart/{fileId}/complete`), avoiding
+  (`/api/files/multipart/initiate` -> client PUTs each part -> `/api/files/multipart/{fileId}/complete`), avoiding
   server bandwidth/memory pressure. Abandoned (`PENDING`) uploads older than `blink.stale-upload-period-hours`
   (default 48 h) are aborted and cleaned up hourly alongside expired files. File size and part count are capped by
   `blink.multipart.max-file-size-bytes` (default 20 GiB) and `blink.multipart.max-part-count` (default 10,000),
   with individual part sizes validated against S3's own 5 MiB–5 GiB per-part limits.
-- **Per-User Rate Limiting** - Upload and download endpoints are protected by a Redis-backed sliding-window rate
+- **Per-User Rate Limiting** - Upload and download endpoints are protected by a Redis-backed fixed-window rate
   limiter.
   Limits are configurable via `blink.rate-limit.upload` and `blink.rate-limit.download` (default: 10 uploads / 60 s,
   30 downloads / 60 s). Exceeding the limit returns `429 Too Many Requests`.
