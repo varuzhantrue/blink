@@ -19,6 +19,7 @@ spring:
 
 minio:
   url: http://localhost:9000
+  public-url: http://localhost:9000
   access-key: minioadmin
   secret-key: minioadmin
   bucket-name: integration-test-bucket

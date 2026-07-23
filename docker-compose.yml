@@ -22,6 +22,7 @@ services:
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:5173
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -53,6 +54,7 @@ services:
       - DB_USERNAME=user
       - DB_PASSWORD=pass
       - MINIO_URL=http://blink-minio:9000
+      - MINIO_PUBLIC_URL=http://localhost:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - SPRING_DATA_REDIS_HOST=blink-redis
